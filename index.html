@@ -452,7 +452,7 @@ const CONFIG = {
   SUPABASE_URL: "https://vhclplpqtybxqamchayz.supabase.co",
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoY2xwbHBxdHlieHFhbWNoYXl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MTUyODUsImV4cCI6MjA5NjI5MTI4NX0.u5fPrUJ98-werUlnvIIqk3ihFl-pLJyE0cjniZBeFII",
   TABLE_NAME: "business_cards",
-  GEMINI_API_KEY: "AQ.Ab8RN6KpJdhnQ0LG0-TfkErmssu4kqq5jGjyn0B9iHl2hVcbWw",
+  GEMINI_API_KEY: "AQ.Ab8RN6KqtG8l0SogmGUosysFdVbp0SHPpAUEcAMdtNaywePJyA",
   GEMINI_MODEL: "gemini-2.5-flash"
 };
 /* ======================================================================= */
@@ -597,22 +597,22 @@ async function runOcr(){
   progressBar.classList.add('indeterminate');
   extractHint.textContent = 'Reading the card…';
 
-  const parts = [{
-    text: "You are reading a business card. Extract the contact details as JSON matching the given schema. " +
-          "Only fill in a field if you can actually read it on the card — leave it as an empty string if it's " +
-          "not present or you're not confident, never guess or invent a value. Combine multiple phone numbers " +
-          "with ' / ' between them. For raw_text_front and raw_text_back, transcribe all visible text from each " +
-          "image exactly as printed, one line per line of text."
-  }];
-
-  for (const side of ['front','back']){
-    if (state.images[side]){
-      const { mimeType, base64 } = dataUrlToBase64(state.images[side]);
-      parts.push({ inline_data: { mime_type: mimeType, data: base64 } });
-    }
-  }
-
   try{
+    const parts = [{
+      text: "You are reading a business card. Extract the contact details as JSON matching the given schema. " +
+            "Only fill in a field if you can actually read it on the card — leave it as an empty string if it's " +
+            "not present or you're not confident, never guess or invent a value. Combine multiple phone numbers " +
+            "with ' / ' between them. For raw_text_front and raw_text_back, transcribe all visible text from each " +
+            "image exactly as printed, one line per line of text."
+    }];
+
+    for (const side of ['front','back']){
+      if (state.images[side]){
+        const { mimeType, base64 } = dataUrlToBase64(state.images[side]);
+        parts.push({ inlineData: { mimeType: mimeType, data: base64 } });
+      }
+    }
+
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
     const res = await fetch(url, {
       method: 'POST',
@@ -620,8 +620,8 @@ async function runOcr(){
       body: JSON.stringify({
         contents: [{ parts }],
         generationConfig: {
-          response_mime_type: 'application/json',
-          response_schema: RESPONSE_SCHEMA
+          responseMimeType: 'application/json',
+          responseSchema: RESPONSE_SCHEMA
         }
       })
     });
@@ -648,15 +648,15 @@ async function runOcr(){
 
     saveBtn.disabled = false;
     saveStatus.textContent = '';
-    extractHint.textContent = "Ready — this reads whichever side(s) you've captured.";
   }catch(err){
+    console.error('OCR error:', err);
     saveStatus.textContent = 'Could not read the card: ' + err.message;
     saveStatus.className = 'status err';
-    extractHint.textContent = "Ready — this reads whichever side(s) you've captured.";
   }finally{
     extractBtn.disabled = false;
     progressWrap.hidden = true;
     progressBar.classList.remove('indeterminate');
+    extractHint.textContent = "Ready — this reads whichever side(s) you've captured.";
   }
 }
 extractBtn.addEventListener('click', runOcr);
