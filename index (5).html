@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cardbox — turn business cards into contacts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #EAE3D3;
+    --paper-light: #F5F1E6;
+    --card: #FFFEFA;
+    --ink: #21261F;
+    --ink-soft: #565F4E;
+    --brass: #9C6B2E;
+    --brass-light: #C08A44;
+    --sage: #46614C;
+    --danger: #A6432E;
+    --rule: rgba(33,38,31,0.16);
+    --rule-strong: rgba(33,38,31,0.32);
+    --radius: 4px;
+    --shadow: 0 1px 2px rgba(33,38,31,0.08), 0 6px 18px rgba(33,38,31,0.08);
+  }
+
+  *{ box-sizing: border-box; }
+  @media (prefers-reduced-motion: reduce){
+    *{ animation: none !important; transition: none !important; }
+  }
+
+  body{
+    margin:0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.5;
+  }
+
+  h1, h2, .brand-mark, .field-value-display{
+    font-family: 'Fraunces', Georgia, serif;
+  }
+
+  a{ color: var(--sage); }
+
+  :focus-visible{
+    outline: 2px solid var(--brass);
+    outline-offset: 2px;
+  }
+
+  .wrap{
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 28px 20px 80px;
+  }
+
+  /* ---- Header ---- */
+  .masthead{
+    display:flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--ink);
+    margin-bottom: 28px;
+  }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand svg{ width:30px; height:30px; flex-shrink:0; }
+  .brand h1{
+    font-size: 28px;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -0.01em;
+  }
+  .tagline{
+    margin: 4px 0 0;
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+  .count-badge{
+    font-size: 13px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    padding-bottom: 3px;
+  }
+  .count-badge strong{ color: var(--ink); font-weight:600; }
+
+  section{ margin-bottom: 36px; }
+  h2{
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .hint{
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    margin: 0 0 16px;
+  }
+
+  /* ---- Scan panel ---- */
+  .side-tabs{
+    display:flex;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+  .side-tab{
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 18px;
+    border: 1px solid var(--rule-strong);
+    border-bottom: none;
+    background: var(--paper-light);
+    color: var(--ink-soft);
+    border-radius: var(--radius) var(--radius) 0 0;
+    cursor: pointer;
+  }
+  .side-tab.active{
+    background: var(--card);
+    color: var(--ink);
+    box-shadow: 0 -1px 0 var(--card);
+  }
+  .side-tab .dot{
+    display:inline-block;
+    width:6px; height:6px;
+    border-radius:50%;
+    background: var(--sage);
+    margin-right:7px;
+    opacity:0;
+  }
+  .side-tab.has-image .dot{ opacity:1; }
+
+  .card-slot{
+    position: relative;
+    aspect-ratio: 1.6 / 1;
+    background: var(--card);
+    border: 1px solid var(--rule-strong);
+    border-radius: 0 var(--radius) var(--radius) var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .card-slot::before{
+    content:"";
+    position:absolute;
+    inset: 10px;
+    border: 1.5px dashed var(--rule-strong);
+    border-radius: 3px;
+    pointer-events:none;
+  }
+  .card-slot .corner-clip{
+    position:absolute;
+    top:0; right:0;
+    width:26px; height:26px;
+    background: var(--brass);
+    clip-path: polygon(100% 0, 0 0, 100% 100%);
+  }
+  .card-image{
+    width:100%; height:100%;
+    object-fit: cover;
+  }
+  .slot-placeholder{
+    text-align:center;
+    color: var(--ink-soft);
+    font-size: 13.5px;
+    padding: 0 24px;
+  }
+  .slot-placeholder svg{
+    width:36px; height:36px;
+    margin-bottom:8px;
+    color: var(--rule-strong);
+  }
+
+  .capture-actions{
+    display:flex;
+    gap:10px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+
+  /* ---- Buttons ---- */
+  .btn{
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn:disabled{ opacity: .45; cursor: not-allowed; }
+  .btn-primary{ background: var(--ink); color: var(--paper-light); }
+  .btn-primary:hover:not(:disabled){ background: #33392f; }
+  .btn-brass{ background: var(--brass); color: #fff; }
+  .btn-brass:hover:not(:disabled){ background: var(--brass-light); }
+  .btn-ghost{ background: transparent; color: var(--ink); border-color: var(--rule-strong); }
+  .btn-ghost:hover:not(:disabled){ background: var(--paper-light); }
+  .btn-text{ background: transparent; color: var(--sage); padding: 10px 4px; }
+  .btn-text:hover:not(:disabled){ text-decoration: underline; }
+
+  /* ---- Extract panel ---- */
+  .extract-panel{
+    background: var(--paper-light);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    display:flex;
+    align-items:center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .extract-panel .hint{ margin:0; flex:1; min-width: 180px; }
+  .progress{
+    width:100%;
+    height: 6px;
+    background: var(--rule);
+    border-radius: 3px;
+    overflow:hidden;
+  }
+  .progress-bar{
+    height:100%;
+    width:0%;
+    background: var(--sage);
+  }
+
+  /* ---- Details panel ---- */
+  .field-grid{
+    display:flex;
+    flex-direction: column;
+    border: 1px solid var(--rule-strong);
+    border-radius: var(--radius);
+    background: var(--card);
+    overflow:hidden;
+  }
+  .field-row{
+    display:flex;
+    align-items: center;
+    border-bottom: 1px solid var(--rule);
+    padding: 0 16px;
+  }
+  .field-row:last-child{ border-bottom:none; }
+  .field-row label{
+    width: 110px;
+    flex-shrink:0;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    padding: 12px 0;
+  }
+  .field-row input, .field-row textarea{
+    flex:1;
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 14.5px;
+    color: var(--ink);
+    padding: 12px 0;
+    resize: none;
+  }
+  .field-row input:focus, .field-row textarea:focus{ outline: none; }
+  .field-row:focus-within{ background: var(--paper-light); }
+  .field-row textarea{ min-height: 20px; }
+
+  .details-panel .btn{ margin-top: 16px; }
+  .status{
+    font-size: 13.5px;
+    margin: 10px 0 0;
+    min-height: 18px;
+  }
+  .status.ok{ color: var(--sage); }
+  .status.err{ color: var(--danger); }
+
+  /* ---- Archive ---- */
+  .card-list{
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .archive-item{
+    display:flex;
+    gap: 14px;
+    align-items:center;
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+  .archive-item .thumb{
+    width: 56px; height: 36px;
+    object-fit: cover;
+    border-radius: 3px;
+    border: 1px solid var(--rule-strong);
+    flex-shrink:0;
+    background: var(--paper-light);
+  }
+  .thumb-initial{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family: 'Fraunces', serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--brass);
+  }
+  .archive-item .info{ flex:1; min-width:0; }
+  .archive-item .info .name{ font-weight: 600; font-size: 14.5px; }
+  .archive-item .info .sub{
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    white-space: nowrap;
+    overflow:hidden;
+    text-overflow: ellipsis;
+  }
+  .archive-item .contact{
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align:right;
+    flex-shrink:0;
+  }
+
+  /* ---- Config banner ---- */
+  .config-banner{
+    background: #F6E9D8;
+    border: 1px solid var(--brass-light);
+    color: #6b4a1e;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    font-size: 13.5px;
+    margin-bottom: 28px;
+  }
+  .config-banner code{
+    background: rgba(0,0,0,0.06);
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 12.5px;
+  }
+
+  @media (max-width: 460px){
+    .field-row{ flex-direction: column; align-items: flex-start; padding: 10px 14px 4px; }
+    .field-row label{ width:auto; padding: 0 0 4px; }
+    .field-row input, .field-row textarea{ padding: 0 0 10px; width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="6" width="28" height="20" rx="2" fill="#FFFEFA" stroke="#21261F" stroke-width="1.6"/>
+        <path d="M2 8 L30 8" stroke="#21261F" stroke-width="1.6"/>
+        <circle cx="9" cy="17" r="3" fill="#9C6B2E"/>
+        <path d="M15 15h11M15 19h8" stroke="#46614C" stroke-width="1.6" stroke-linecap="round"/>
+      </svg>
+      <h1>Cardbox</h1>
+    </div>
+    <div class="count-badge"><strong id="savedCount">0</strong> saved</div>
+  </header>
+
+  <div id="configBanner" class="config-banner" hidden>
+    Supabase isn't connected yet. Open <code>index.html</code>, find the <code>CONFIG</code> block near the top of the script,
+    and fill in <code>SUPABASE_URL</code>, <code>SUPABASE_ANON_KEY</code>, and <code>TABLE_NAME</code>.
+  </div>
+
+  <p class="tagline" style="margin: -20px 0 24px;">Photograph a card, read the text, save the contact.</p>
+
+  <!-- Scan panel -->
+  <section class="scan-panel">
+    <div class="side-tabs">
+      <button class="side-tab active" data-side="front" id="tabFront"><span class="dot"></span>Front</button>
+      <button class="side-tab" data-side="back" id="tabBack"><span class="dot"></span>Back</button>
+    </div>
+    <div class="card-slot" id="cardSlot">
+      <img id="frontPreview" class="card-image" hidden alt="Front of card">
+      <img id="backPreview" class="card-image" hidden alt="Back of card">
+      <div class="slot-placeholder" id="slotPlaceholder">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M8 6l1.5-2.5h5L16 6"/><circle cx="12" cy="12.5" r="3"/></svg>
+        <p>No <span id="sideLabel">front</span> photo yet</p>
+      </div>
+      <div class="corner-clip"></div>
+    </div>
+    <div class="capture-actions">
+      <label class="btn btn-primary">
+        Use camera
+        <input type="file" accept="image/*" capture="environment" id="cameraInput" hidden>
+      </label>
+      <label class="btn btn-ghost">
+        Upload photo
+        <input type="file" accept="image/*" id="uploadInput" hidden>
+      </label>
+      <button class="btn btn-text" id="retakeBtn" hidden type="button">Retake</button>
+    </div>
+  </section>
+
+  <!-- Extract panel -->
+  <section class="extract-panel">
+    <div style="flex:1; min-width:180px;">
+      <p class="hint" id="extractHint" style="margin-bottom:8px;">Capture the front — and the back, if it has details too — then read the card.</p>
+      <div class="progress" id="progressWrap" hidden><div class="progress-bar" id="progressBar"></div></div>
+    </div>
+    <button class="btn btn-brass" id="extractBtn" disabled type="button">Read the card</button>
+  </section>
+
+  <!-- Details panel -->
+  <section class="details-panel">
+    <h2>Contact details</h2>
+    <p class="hint">Check these against the card — OCR isn't perfect, especially on busy layouts.</p>
+    <div class="field-grid">
+      <div class="field-row"><label for="fName">Name</label><input id="fName" type="text" autocomplete="off"></div>
+      <div class="field-row"><label for="fDesignation">Designation</label><input id="fDesignation" type="text" autocomplete="off"></div>
+      <div class="field-row"><label for="fCompany">Company</label><input id="fCompany" type="text" autocomplete="off"></div>
+      <div class="field-row"><label for="fPhone">Phone</label><input id="fPhone" type="text" autocomplete="off"></div>
+      <div class="field-row"><label for="fEmail">Email</label><input id="fEmail" type="text" autocomplete="off"></div>
+      <div class="field-row"><label for="fWebsite">Website</label><input id="fWebsite" type="text" autocomplete="off"></div>
+      <div class="field-row"><label for="fAddress">Address</label><textarea id="fAddress" rows="2"></textarea></div>
+    </div>
+    <button class="btn btn-primary" id="saveBtn" disabled type="button">Save contact</button>
+    <p class="status" id="saveStatus" role="status"></p>
+  </section>
+
+  <!-- Archive -->
+  <section class="archive-panel">
+    <h2>Saved contacts</h2>
+    <p class="hint" id="archiveEmpty">Nothing saved yet — your saved cards will appear here.</p>
+    <div class="card-list" id="cardList"></div>
+  </section>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+/* ======================= CONFIG — fill these in ======================= */
+const CONFIG = {
+  SUPABASE_URL: "https://vhclplpqtybxqamchayz.supabase.co",
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoY2xwbHBxdHlieHFhbWNoYXl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MTUyODUsImV4cCI6MjA5NjI5MTI4NX0.u5fPrUJ98-werUlnvIIqk3ihFl-pLJyE0cjniZBeFII",
+  TABLE_NAME: "business_cards"
+};
+/* ======================================================================= */
+
+const isConfigured = CONFIG.SUPABASE_URL.startsWith("http") && !CONFIG.SUPABASE_ANON_KEY.startsWith("YOUR_");
+const supabase = isConfigured ? createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : null;
+
+document.getElementById('configBanner').hidden = isConfigured;
+
+/* ---------------- state ---------------- */
+const state = {
+  side: 'front',
+  images: { front: null, back: null },   // dataURLs
+  texts:  { front: '', back: '' }
+};
+
+/* ---------------- element refs ---------------- */
+const tabFront = document.getElementById('tabFront');
+const tabBack = document.getElementById('tabBack');
+const frontPreview = document.getElementById('frontPreview');
+const backPreview = document.getElementById('backPreview');
+const slotPlaceholder = document.getElementById('slotPlaceholder');
+const sideLabel = document.getElementById('sideLabel');
+const cameraInput = document.getElementById('cameraInput');
+const uploadInput = document.getElementById('uploadInput');
+const retakeBtn = document.getElementById('retakeBtn');
+const extractBtn = document.getElementById('extractBtn');
+const extractHint = document.getElementById('extractHint');
+const progressWrap = document.getElementById('progressWrap');
+const progressBar = document.getElementById('progressBar');
+const saveBtn = document.getElementById('saveBtn');
+const saveStatus = document.getElementById('saveStatus');
+const cardList = document.getElementById('cardList');
+const archiveEmpty = document.getElementById('archiveEmpty');
+const savedCountEl = document.getElementById('savedCount');
+
+const fields = {
+  name: document.getElementById('fName'),
+  designation: document.getElementById('fDesignation'),
+  company: document.getElementById('fCompany'),
+  phone: document.getElementById('fPhone'),
+  email: document.getElementById('fEmail'),
+  website: document.getElementById('fWebsite'),
+  address: document.getElementById('fAddress')
+};
+
+/* ---------------- tab switching ---------------- */
+function renderSlot(){
+  const img = state.side === 'front' ? frontPreview : backPreview;
+  const other = state.side === 'front' ? backPreview : frontPreview;
+  other.hidden = true;
+  const url = state.images[state.side];
+  if (url){
+    img.src = url;
+    img.hidden = false;
+    slotPlaceholder.hidden = true;
+    retakeBtn.hidden = false;
+  } else {
+    img.hidden = true;
+    slotPlaceholder.hidden = false;
+    retakeBtn.hidden = true;
+  }
+  sideLabel.textContent = state.side;
+  tabFront.classList.toggle('active', state.side === 'front');
+  tabBack.classList.toggle('active', state.side === 'back');
+  tabFront.classList.toggle('has-image', !!state.images.front);
+  tabBack.classList.toggle('has-image', !!state.images.back);
+  updateExtractState();
+}
+tabFront.addEventListener('click', () => { state.side = 'front'; renderSlot(); });
+tabBack.addEventListener('click', () => { state.side = 'back'; renderSlot(); });
+
+function updateExtractState(){
+  const hasAny = !!(state.images.front || state.images.back);
+  extractBtn.disabled = !hasAny;
+  extractHint.textContent = hasAny
+    ? "Ready — this reads whichever side(s) you've captured."
+    : "Capture the front — and the back, if it has details too — then read the card.";
+}
+
+/* ---------------- capture handling ---------------- */
+function readFileAsDataUrl(file){
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.onerror = () => reject(new Error('Could not read that image.'));
+    r.readAsDataURL(file);
+  });
+}
+async function handleFile(file){
+  if (!file) return;
+  try{
+    const dataUrl = await readFileAsDataUrl(file);
+    state.images[state.side] = dataUrl;
+    renderSlot();
+  }catch(err){
+    alert(err.message);
+  }
+}
+cameraInput.addEventListener('change', e => handleFile(e.target.files[0]));
+uploadInput.addEventListener('change', e => handleFile(e.target.files[0]));
+retakeBtn.addEventListener('click', () => {
+  state.images[state.side] = null;
+  state.texts[state.side] = '';
+  cameraInput.value = '';
+  uploadInput.value = '';
+  renderSlot();
+});
+
+/* ---------------- OCR + parsing ---------------- */
+extractBtn.addEventListener('click', runOcr);
+
+async function runOcr(){
+  if (typeof Tesseract === 'undefined'){
+    saveStatus.textContent = 'OCR library failed to load — check your internet connection and reload.';
+    saveStatus.className = 'status err';
+    return;
+  }
+  extractBtn.disabled = true;
+  progressWrap.hidden = false;
+  progressBar.style.width = '0%';
+
+  const sidesToRead = ['front','back'].filter(s => state.images[s]);
+  let combinedText = '';
+
+  for (let i = 0; i < sidesToRead.length; i++){
+    const side = sidesToRead[i];
+    const { data } = await Tesseract.recognize(state.images[side], 'eng', {
+      logger: m => {
+        if (m.status === 'recognizing text'){
+          const pct = Math.round(((i + m.progress) / sidesToRead.length) * 100);
+          progressBar.style.width = pct + '%';
+        }
+      }
+    });
+    state.texts[side] = data.text || '';
+    combinedText += '\n' + state.texts[side];
+  }
+
+  progressBar.style.width = '100%';
+  setTimeout(() => { progressWrap.hidden = true; }, 400);
+  extractBtn.disabled = false;
+
+  const parsed = parseCardText(combinedText);
+  fields.name.value = parsed.name;
+  fields.designation.value = parsed.designation;
+  fields.company.value = parsed.company;
+  fields.phone.value = parsed.phone;
+  fields.email.value = parsed.email;
+  fields.website.value = parsed.website;
+  fields.address.value = parsed.address;
+  saveBtn.disabled = false;
+  saveStatus.textContent = '';
+}
+
+function parseCardText(raw){
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+
+  const emailRe = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+  const phoneRe = /(\+?\d[\d\-\s().]{7,}\d)/;
+  const webRe = /((https?:\/\/)?(www\.)[a-zA-Z0-9-]+\.[a-z]{2,}(\/\S*)?|(?<!@)\b[a-zA-Z0-9-]+\.(com|net|org|io|co|in|biz|info)\b(\/\S*)?)/i;
+  const designationWords = /\b(CEO|CTO|CFO|COO|Founder|Co-Founder|President|Director|Manager|Head of|VP|Vice President|Executive|Engineer|Consultant|Officer|Owner|Partner|Analyst|Specialist|Coordinator|Sales|Marketing|Lead|Senior)\b/i;
+  const companyWords = /\b(Inc|LLC|Ltd|Pvt|Corp|Corporation|Company|Co\.|Group|Technologies|Solutions|Enterprises)\b/i;
+  const addressWords = /\b(Street|St\.|Road|Rd\.|Avenue|Ave\.|Suite|Floor|Fl\.|Block|Lane|Sector|Nagar|Colony|Zip|Pin|Building)\b/i;
+  const addressLike = /\d{2,}.*(,|\bSt\b|\bRd\b|\bAve\b)/i;
+
+  let email = '', phone = '', website = '', designation = '', company = '', address = '';
+  const remaining = [];
+
+  for (const line of lines){
+    const emailMatch = line.match(emailRe);
+    if (emailMatch && !email){ email = emailMatch[0]; continue; }
+
+    const webMatch = line.match(webRe);
+    if (webMatch && !website && !emailMatch){ website = webMatch[0].replace(/^https?:\/\//,''); continue; }
+
+    const phoneMatch = line.match(phoneRe);
+    const digitCount = (line.match(/\d/g) || []).length;
+    if (phoneMatch && digitCount >= 7 && !designationWords.test(line)){
+      if (!phone) phone = phoneMatch[0].replace(/\s{2,}/g,' ').trim();
+      else phone += ' / ' + phoneMatch[0].trim();
+      continue;
+    }
+
+    if (designationWords.test(line) && !designation){ designation = line; continue; }
+    if (companyWords.test(line) && !company){ company = line; continue; }
+    if ((addressWords.test(line) || addressLike.test(line))){
+      address = address ? address + ', ' + line : line;
+      continue;
+    }
+    remaining.push(line);
+  }
+
+  // Name: first short, mostly-alphabetic remaining line
+  let name = '';
+  for (const line of remaining){
+    const wordCount = line.split(/\s+/).length;
+    const alphaRatio = (line.match(/[a-zA-Z]/g) || []).length / Math.max(line.length,1);
+    if (wordCount <= 4 && alphaRatio > 0.7 && !/\d/.test(line)){
+      name = line;
+      break;
+    }
+  }
+  if (!name && remaining.length) name = remaining[0];
+
+  if (!company){
+    const leftover = remaining.find(l => l !== name);
+    if (leftover) company = leftover;
+  }
+
+  return { name, designation, company, phone, email, website, address };
+}
+
+/* ---------------- manual edit unlocks save ---------------- */
+Object.values(fields).forEach(el => el.addEventListener('input', () => { saveBtn.disabled = false; }));
+
+/* ---------------- save to Supabase ---------------- */
+saveBtn.addEventListener('click', saveContact);
+
+async function saveContact(){
+  if (!isConfigured){
+    saveStatus.textContent = 'Add your Supabase URL and key in the CONFIG block first.';
+    saveStatus.className = 'status err';
+    return;
+  }
+  if (!fields.name.value && !fields.phone.value && !fields.email.value){
+    saveStatus.textContent = 'Add at least a name, phone, or email before saving.';
+    saveStatus.className = 'status err';
+    return;
+  }
+
+  saveBtn.disabled = true;
+  saveStatus.textContent = 'Saving…';
+  saveStatus.className = 'status';
+
+  const record = {
+    name: fields.name.value.trim(),
+    designation: fields.designation.value.trim(),
+    company: fields.company.value.trim(),
+    phone: fields.phone.value.trim(),
+    email: fields.email.value.trim(),
+    website: fields.website.value.trim(),
+    address: fields.address.value.trim(),
+    raw_text_front: state.texts.front || null,
+    raw_text_back: state.texts.back || null
+  };
+
+  const { data, error } = await supabase.from(CONFIG.TABLE_NAME).insert(record).select();
+
+  if (error){
+    saveStatus.textContent = 'Could not save: ' + error.message;
+    saveStatus.className = 'status err';
+    saveBtn.disabled = false;
+    return;
+  }
+
+  saveStatus.textContent = 'Saved.';
+  saveStatus.className = 'status ok';
+  if (data && data[0]) prependCard(data[0]);
+  resetForm();
+}
+
+function resetForm(){
+  state.images = { front: null, back: null };
+  state.texts = { front: '', back: '' };
+  Object.values(fields).forEach(el => el.value = '');
+  cameraInput.value = '';
+  uploadInput.value = '';
+  state.side = 'front';
+  renderSlot();
+  saveBtn.disabled = true;
+}
+
+/* ---------------- archive list ---------------- */
+function prependCard(row){
+  archiveEmpty.hidden = true;
+  const el = document.createElement('div');
+  el.className = 'archive-item';
+  const initial = (row.name || '?').trim().charAt(0).toUpperCase();
+  el.innerHTML = `
+    <div class="thumb thumb-initial">${escapeHtml(initial)}</div>
+    <div class="info">
+      <div class="name">${escapeHtml(row.name || 'Unnamed')}</div>
+      <div class="sub">${escapeHtml([row.designation, row.company].filter(Boolean).join(' · '))}</div>
+    </div>
+    <div class="contact">
+      ${row.phone ? `<div>${escapeHtml(row.phone)}</div>` : ''}
+      ${row.email ? `<div>${escapeHtml(row.email)}</div>` : ''}
+    </div>
+  `;
+  cardList.prepend(el);
+  const count = cardList.children.length;
+  savedCountEl.textContent = count;
+}
+
+function escapeHtml(str){
+  const div = document.createElement('div');
+  div.textContent = str || '';
+  return div.innerHTML;
+}
+
+async function loadSaved(){
+  if (!supabase) return;
+  const { data, error } = await supabase
+    .from(CONFIG.TABLE_NAME)
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error){ console.warn('Could not load saved contacts:', error.message); return; }
+  if (data && data.length){
+    archiveEmpty.hidden = true;
+    data.forEach(prependCard);
+  }
+}
+
+renderSlot();
+loadSaved();
+</script>
+
+</body>
+</html>
