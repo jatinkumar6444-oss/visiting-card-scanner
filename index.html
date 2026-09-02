@@ -227,6 +227,15 @@
     width:0%;
     background: var(--sage);
   }
+  .progress-bar.indeterminate{
+    width: 40%;
+    animation: indeterminate-sweep 1.1s ease-in-out infinite;
+  }
+  @keyframes indeterminate-sweep{
+    0%{ margin-left: 0%; }
+    50%{ margin-left: 60%; }
+    100%{ margin-left: 0%; }
+  }
 
   /* ---- Details panel ---- */
   .field-grid{
@@ -365,8 +374,9 @@
   </header>
 
   <div id="configBanner" class="config-banner" hidden>
-    Supabase isn't connected yet. Open <code>index.html</code>, find the <code>CONFIG</code> block near the top of the script,
-    and fill in <code>SUPABASE_URL</code>, <code>SUPABASE_ANON_KEY</code>, and <code>TABLE_NAME</code>.
+    Some setup is still needed. Open <code>index.html</code>, find the <code>CONFIG</code> block near the top of the
+    script, and fill in whichever of these are still placeholders: <code>SUPABASE_URL</code>, <code>SUPABASE_ANON_KEY</code>,
+    <code>TABLE_NAME</code>, and <code>GEMINI_API_KEY</code>.
   </div>
 
   <p class="tagline" style="margin: -20px 0 24px;">Photograph a card, read the text, save the contact.</p>
@@ -434,7 +444,6 @@
 
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script type="module">
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
@@ -442,14 +451,17 @@ import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js
 const CONFIG = {
   SUPABASE_URL: "https://vhclplpqtybxqamchayz.supabase.co",
   SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoY2xwbHBxdHlieHFhbWNoYXl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA3MTUyODUsImV4cCI6MjA5NjI5MTI4NX0.u5fPrUJ98-werUlnvIIqk3ihFl-pLJyE0cjniZBeFII",
-  TABLE_NAME: "business_cards"
+  TABLE_NAME: "business_cards",
+  GEMINI_API_KEY: "AQ.Ab8RN6KpJdhnQ0LG0-TfkErmssu4kqq5jGjyn0B9iHl2hVcbWw",
+  GEMINI_MODEL: "gemini-2.5-flash"
 };
 /* ======================================================================= */
 
 const isConfigured = CONFIG.SUPABASE_URL.startsWith("http") && !CONFIG.SUPABASE_ANON_KEY.startsWith("YOUR_");
+const isGeminiConfigured = CONFIG.GEMINI_API_KEY && !CONFIG.GEMINI_API_KEY.startsWith("YOUR_");
 const supabase = isConfigured ? createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY) : null;
 
-document.getElementById('configBanner').hidden = isConfigured;
+document.getElementById('configBanner').hidden = isConfigured && isGeminiConfigured;
 
 /* ---------------- state ---------------- */
 const state = {
@@ -551,109 +563,103 @@ retakeBtn.addEventListener('click', () => {
   renderSlot();
 });
 
-/* ---------------- OCR + parsing ---------------- */
-extractBtn.addEventListener('click', runOcr);
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    name: { type: "STRING", description: "The person's full name" },
+    designation: { type: "STRING", description: "Job title / role" },
+    company: { type: "STRING", description: "Company or organization name" },
+    phone: { type: "STRING", description: "Phone number(s), separated by ' / ' if more than one" },
+    email: { type: "STRING", description: "Email address" },
+    website: { type: "STRING", description: "Website URL" },
+    address: { type: "STRING", description: "Full postal address" },
+    raw_text_front: { type: "STRING", description: "All text visible on the front image, line by line" },
+    raw_text_back: { type: "STRING", description: "All text visible on the back image, line by line" }
+  },
+  required: ["name","designation","company","phone","email","website","address","raw_text_front","raw_text_back"]
+};
+
+function dataUrlToBase64(dataUrl){
+  const [header, base64] = dataUrl.split(',');
+  const mimeMatch = header.match(/data:(.*?);base64/);
+  return { mimeType: mimeMatch ? mimeMatch[1] : 'image/jpeg', base64 };
+}
 
 async function runOcr(){
-  if (typeof Tesseract === 'undefined'){
-    saveStatus.textContent = 'OCR library failed to load — check your internet connection and reload.';
+  if (!isGeminiConfigured){
+    saveStatus.textContent = 'Add your Gemini API key in the CONFIG block first.';
     saveStatus.className = 'status err';
     return;
   }
+
   extractBtn.disabled = true;
   progressWrap.hidden = false;
-  progressBar.style.width = '0%';
+  progressBar.classList.add('indeterminate');
+  extractHint.textContent = 'Reading the card…';
 
-  const sidesToRead = ['front','back'].filter(s => state.images[s]);
-  let combinedText = '';
+  const parts = [{
+    text: "You are reading a business card. Extract the contact details as JSON matching the given schema. " +
+          "Only fill in a field if you can actually read it on the card — leave it as an empty string if it's " +
+          "not present or you're not confident, never guess or invent a value. Combine multiple phone numbers " +
+          "with ' / ' between them. For raw_text_front and raw_text_back, transcribe all visible text from each " +
+          "image exactly as printed, one line per line of text."
+  }];
 
-  for (let i = 0; i < sidesToRead.length; i++){
-    const side = sidesToRead[i];
-    const { data } = await Tesseract.recognize(state.images[side], 'eng', {
-      logger: m => {
-        if (m.status === 'recognizing text'){
-          const pct = Math.round(((i + m.progress) / sidesToRead.length) * 100);
-          progressBar.style.width = pct + '%';
+  for (const side of ['front','back']){
+    if (state.images[side]){
+      const { mimeType, base64 } = dataUrlToBase64(state.images[side]);
+      parts.push({ inline_data: { mime_type: mimeType, data: base64 } });
+    }
+  }
+
+  try{
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${CONFIG.GEMINI_MODEL}:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: {
+          response_mime_type: 'application/json',
+          response_schema: RESPONSE_SCHEMA
         }
-      }
+      })
     });
-    state.texts[side] = data.text || '';
-    combinedText += '\n' + state.texts[side];
+
+    if (!res.ok){
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody?.error?.message || `Gemini request failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('No data came back from Gemini.');
+    const parsed = JSON.parse(text);
+
+    fields.name.value = parsed.name || '';
+    fields.designation.value = parsed.designation || '';
+    fields.company.value = parsed.company || '';
+    fields.phone.value = parsed.phone || '';
+    fields.email.value = parsed.email || '';
+    fields.website.value = parsed.website || '';
+    fields.address.value = parsed.address || '';
+    state.texts.front = parsed.raw_text_front || '';
+    state.texts.back = parsed.raw_text_back || '';
+
+    saveBtn.disabled = false;
+    saveStatus.textContent = '';
+    extractHint.textContent = "Ready — this reads whichever side(s) you've captured.";
+  }catch(err){
+    saveStatus.textContent = 'Could not read the card: ' + err.message;
+    saveStatus.className = 'status err';
+    extractHint.textContent = "Ready — this reads whichever side(s) you've captured.";
+  }finally{
+    extractBtn.disabled = false;
+    progressWrap.hidden = true;
+    progressBar.classList.remove('indeterminate');
   }
-
-  progressBar.style.width = '100%';
-  setTimeout(() => { progressWrap.hidden = true; }, 400);
-  extractBtn.disabled = false;
-
-  const parsed = parseCardText(combinedText);
-  fields.name.value = parsed.name;
-  fields.designation.value = parsed.designation;
-  fields.company.value = parsed.company;
-  fields.phone.value = parsed.phone;
-  fields.email.value = parsed.email;
-  fields.website.value = parsed.website;
-  fields.address.value = parsed.address;
-  saveBtn.disabled = false;
-  saveStatus.textContent = '';
 }
-
-function parseCardText(raw){
-  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
-
-  const emailRe = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
-  const phoneRe = /(\+?\d[\d\-\s().]{7,}\d)/;
-  const webRe = /((https?:\/\/)?(www\.)[a-zA-Z0-9-]+\.[a-z]{2,}(\/\S*)?|(?<!@)\b[a-zA-Z0-9-]+\.(com|net|org|io|co|in|biz|info)\b(\/\S*)?)/i;
-  const designationWords = /\b(CEO|CTO|CFO|COO|Founder|Co-Founder|President|Director|Manager|Head of|VP|Vice President|Executive|Engineer|Consultant|Officer|Owner|Partner|Analyst|Specialist|Coordinator|Sales|Marketing|Lead|Senior)\b/i;
-  const companyWords = /\b(Inc|LLC|Ltd|Pvt|Corp|Corporation|Company|Co\.|Group|Technologies|Solutions|Enterprises)\b/i;
-  const addressWords = /\b(Street|St\.|Road|Rd\.|Avenue|Ave\.|Suite|Floor|Fl\.|Block|Lane|Sector|Nagar|Colony|Zip|Pin|Building)\b/i;
-  const addressLike = /\d{2,}.*(,|\bSt\b|\bRd\b|\bAve\b)/i;
-
-  let email = '', phone = '', website = '', designation = '', company = '', address = '';
-  const remaining = [];
-
-  for (const line of lines){
-    const emailMatch = line.match(emailRe);
-    if (emailMatch && !email){ email = emailMatch[0]; continue; }
-
-    const webMatch = line.match(webRe);
-    if (webMatch && !website && !emailMatch){ website = webMatch[0].replace(/^https?:\/\//,''); continue; }
-
-    const phoneMatch = line.match(phoneRe);
-    const digitCount = (line.match(/\d/g) || []).length;
-    if (phoneMatch && digitCount >= 7 && !designationWords.test(line)){
-      if (!phone) phone = phoneMatch[0].replace(/\s{2,}/g,' ').trim();
-      else phone += ' / ' + phoneMatch[0].trim();
-      continue;
-    }
-
-    if (designationWords.test(line) && !designation){ designation = line; continue; }
-    if (companyWords.test(line) && !company){ company = line; continue; }
-    if ((addressWords.test(line) || addressLike.test(line))){
-      address = address ? address + ', ' + line : line;
-      continue;
-    }
-    remaining.push(line);
-  }
-
-  // Name: first short, mostly-alphabetic remaining line
-  let name = '';
-  for (const line of remaining){
-    const wordCount = line.split(/\s+/).length;
-    const alphaRatio = (line.match(/[a-zA-Z]/g) || []).length / Math.max(line.length,1);
-    if (wordCount <= 4 && alphaRatio > 0.7 && !/\d/.test(line)){
-      name = line;
-      break;
-    }
-  }
-  if (!name && remaining.length) name = remaining[0];
-
-  if (!company){
-    const leftover = remaining.find(l => l !== name);
-    if (leftover) company = leftover;
-  }
-
-  return { name, designation, company, phone, email, website, address };
-}
+extractBtn.addEventListener('click', runOcr);
 
 /* ---------------- manual edit unlocks save ---------------- */
 Object.values(fields).forEach(el => el.addEventListener('input', () => { saveBtn.disabled = false; }));
